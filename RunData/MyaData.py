@@ -91,38 +91,40 @@ class MyaData:
             print("Fetching channel '{}'".format(channel))
 
         try:
-            my_dat = self._session.get(self._url_head,verify=False,params=params)
+            my_dat = self._session.get(self._url_head, verify=False, params=params)
         except ConnectionError:
             print("Could not connect to the Mya myQuery website. Was the password correctly entered? ")
-            raise ConnectionError("Could not connect to ",self._url_head)
+            raise ConnectionError("Could not connect to ", self._url_head)
 
         if not my_dat.ok:
             print("Error, could not get the data for channel: {}".format(channel))
-            print("Webserver responded with status: ",my_dat.status_code)
+            print("Webserver responded with status: ", my_dat.status_code)
             print("Where your CUE login credential typed correctly? ")
-            raise ConnectionError("Could not connect to ",self._url_head)
+            raise ConnectionError("Could not connect to ", self._url_head)
 
         dat_len = len(my_dat.json()['data'])
         if dat_len == 0:                                           # EPICS sparsified the data?
-            return( pd.DataFrame({'ms':[start.timestamp()*1000,end.timestamp()*1000],'value':[None,None],'time':[start,end]}))
+            return pd.DataFrame({'ms': [start.timestamp()*1000, end.timestamp()*1000],
+                                 'value': [None, None], 'time': [start, end]})
 
         pd_frame = pd.DataFrame(my_dat.json()['data'])
 
-        if len(pd_frame.columns)>2 and not do_not_clean:          # If there are issues with time stamps, 2 extra columns are added: 't' and 'x'
-            if self.debug>3:
-                print("There is trouble with the Mya data for channel {} in the time period {} - {}".format(channel,start,end))
+        # If there are issues with time stamps, 2 extra columns are added: 't' and 'x'
+        if len(pd_frame.columns) > 2 and not do_not_clean:
+            if self.debug > 3:
+                print(f"There is trouble with the Mya data for channel {channel} in the time period {start} - {end}")
                 print(pd_frame.columns)
             try:
-#
-# TODO: See if these two cases can be consolidated into one, which just looks for nan in 'v'
-#
-# Test this:
-# Set to zero:
-#               pd_frame.loc[ pd.isna(pd_frame['v'] ),'v'] = 0
-# Drop them:
-#               pd_frame.drop(pd_frame.loc[ pd_frame['x'] == True].index,inplace=True)
-# or
-                pd_frame.drop(pd_frame.loc[ pd.isna(pd_frame['v']) ].index,inplace=True)
+                #
+                # TODO: See if these two cases can be consolidated into one, which just looks for nan in 'v'
+                #
+                # Test this:
+                # Set to zero:
+                #               pd_frame.loc[ pd.isna(pd_frame['v'] ),'v'] = 0
+                # Drop them:
+                #               pd_frame.drop(pd_frame.loc[ pd_frame['x'] == True].index,inplace=True)
+                # or
+                pd_frame.drop(pd_frame.loc[pd.isna(pd_frame['v'])].index, inplace=True)
 
                 # if 't' in pd_frame.keys():
                 #     pd_frame.drop(['t'], inplace=True, axis=1) # Finally, remove entire 't' column.
@@ -151,55 +153,55 @@ class MyaData:
                 print(e)
                 sys.exit(1)
 
-        pd_frame.rename(columns={"d":"ms","v":"value"},inplace=True)                         # Rename the columns
+        pd_frame.rename(columns={"d": "ms", "v": "value"}, inplace=True)                         # Rename the columns
         #
         # Convert the ms timestamp to a datetime in the correct time zone.
         #
-        pd_frame.loc[:,'time']= [ np.datetime64(x,'ms') for x in pd_frame.ms]
+        pd_frame.loc[:, 'time'] = [np.datetime64(x, 'ms') for x in pd_frame.ms]
 
         # If you want with encoded timezone, you can do:
-        #pd.Series(pd.to_datetime([ datetime.fromtimestamp(x/1000) for x in pd_frame.ms]).tz_localize("US/Eastern"),dtype=object)
+        # pd.Series(pd.to_datetime([ datetime.fromtimestamp(x/1000)
+        #  for x in pd_frame.ms]).tz_localize("US/Eastern"),dtype=object)
         # or
-        #pd.Series(pd.to_datetime(pd_frame.loc[:,'ms'],unit='ms',utc=True).dt.tz_convert("US/Eastern"),dtype=object)
+        # pd.Series(pd.to_datetime(pd_frame.loc[:,'ms'],unit='ms',utc=True).dt.tz_convert("US/Eastern"),dtype=object)
         #
         # But these are quite a bit slower.
         #
-        return(pd_frame)
+        return pd_frame
 
-    def get_multi(self,channels,start,end):
-        '''Get multiple channels in the list 'channels' into a single dataframe and return.
+    def get_multi(self, channels, start, end):
+        """Get multiple channels in the list 'channels' into a single dataframe and return.
         To do so, the first channel's time stamps are used as master. All the other channels are fetched,
         and their time stamps are re-aligned with the first channel timestamps by interpolation.
         arguments:
             channels  - a list of channels to fetch, or a dictionary. If dict, then translate channel names.
             start     - start time.
-            end       - end time'''
+            end       - end time"""
 
-        translate=False
+        translate = False
         if type(channels) is str:
-            return(self.get(channels,start,end))
+            return self.get(channels, start, end)
         if type(channels) is dict:
             channels_dict = channels
             channels = list(channels_dict.keys())
-            translate=True
+            translate = True
 
-
-        pd_frame = self.get(channels[0],start,end)
+        pd_frame = self.get(channels[0], start, end)
         columns = list(pd_frame.columns)
 
         if translate:
-            columns[1]=channels_dict[channels[0]]
+            columns[1] = channels_dict[channels[0]]
         else:
-            columns[1]=channels[0]
+            columns[1] = channels[0]
 
-        pd_frame.columns=columns                     # Rename the "value" column to the channel name.
+        pd_frame.columns = columns                     # Rename the "value" column to the channel name.
 
-        for i in range(1,len(channels)):
-            pd_tmp = self.get(channels[i],start,end)
-            tmp_corr = np.interp(pd_frame.ms,pd_tmp.ms,pd_tmp.value)
+        for i in range(1, len(channels)):
+            pd_tmp = self.get(channels[i], start, end)
+            tmp_corr = np.interp(pd_frame.ms, pd_tmp.ms, pd_tmp.value)
             if translate:
                 pd_frame[channels_dict[channels[i]]] = tmp_corr
             else:
                 pd_frame[channels[i]] = tmp_corr       # Add the interpolated data into the data frame.
 
-        return(pd_frame)
+        return pd_frame
