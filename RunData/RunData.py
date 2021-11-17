@@ -294,8 +294,8 @@ class RunData:
                         print("WARNING: Run with is_valid_run_end not set is withing last 8 hours,"
                               " not adding to cache.")
                     # We drop the run from the table, so it will not go into the cache.
- #                   self.All_Runs.drop(self.All_Runs.index[-1], inplace=True)
- #                   num_runs -= 1
+                    #self.All_Runs.drop(self.All_Runs.index[-1], inplace=True)
+                    #num_runs -= 1
                     if len(self.All_Runs[(self.All_Runs["start_time"] > start) &
                                          (self.All_Runs["end_time"] < end) &
                                          (self.All_Runs["is_valid_run_end"])]
@@ -906,22 +906,6 @@ class RunData:
                     runs.loc[selected, "sum_event_count"].iloc[-1])
         else:
             return 0, 0, 0
-
-def attennuations_with_targ_thickness():
-    """ During the run we have observed that the beam attenuation depends on the target thickness too.
-    So this dictionary provides target<->attenuation dictionary """
-
-    attenuations = {
-        'Empty': 29.24555,
-        'empty': 29.24555,
-        'Unknown': 29.24555,
-        '4 um W': 28.40418,
-        '8 um W': 27.56255,
-        '15 um W': 26.16205,
-        '20 um W': 25.38535
-    }
-
-    return attenuations
 
 
 if __name__ == "__main__":
